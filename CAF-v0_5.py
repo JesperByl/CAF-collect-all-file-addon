@@ -1,12 +1,44 @@
+###################################################
+# CAF v0.5 - Blender 5.2 LTS update
+#
+# Updated for Blender 5.2.2 LTS on 2026-09-29 with AI assistance
+# (Claude Code by Anthropic). Original add-on by Samy Tichadou (tonton).
+#
+# Tested with an automated script in Blender 5.2.2 LTS and 4.2 LTS (bpy
+# module, no UI): a saved .blend with external images, an image-sequence
+# clip, a movie, sequencer image/sound/movie strips, a font and a linked
+# .blend library. Every operator copied and relinked its files, and
+# kept going when some or all of those files were missing.
+#
+# Changes from v0.4:
+#   - Sequencer: SequenceEditor.sequences_all no longer exists in 5.x, it
+#     is strips_all. Both names are handled, so 4.2 LTS still works.
+#   - "Current Scene" strips use the workspace's Sequencer Scene (new in
+#     5.x, can differ from the active scene) and no longer crash on a
+#     scene without a sequencer. Each strip is handled once (the strip
+#     loop ran once per strip, repeating every line in the report).
+#   - Report date and start/end times are taken when the operator runs,
+#     not when the add-on was loaded. Reports are written as UTF-8.
+#   - A missing source file no longer stops the whole collection with an
+#     error: it is logged as MISSING in the report and left unchanged.
+#   - Removed an unused duplicate of getimages().
+#   - Image strips: copied by file name instead of strip name, and the
+#     report no longer reads obj.filepath, which image strips don't have.
+#     Both made "All External Files" crash as soon as the sequencer held
+#     an image strip, in any Blender version.
+#   - The menu has a valid bl_idname (no more '_MT_' warning).
+#   - bl_info: wiki_url -> doc_url, correct menu location, min. 4.2.
+###################################################
+
 bl_info = {  
  "name": "CAF - Collect All Files",  
  "author": "Samy Tichadou (tonton), RUben Begalov@gmail.com",  
- "version": (0, 3),  
- "blender": (2, 80, 0),  
- "location": "Import-Export > Collect All Files",  
+ "version": (0, 5, 0),  
+ "blender": (4, 2, 0),  
+ "location": "File > External Data > Collect External Files",  
  "description": "Add a Menu in the Info/File header to Collect your external files, copy them in a dedicated folder near the .blend, and relink the datablocks",  
  "warning": "Some Type of proprietary files can cause errors. Doesn't work with an unsaved .blend, it is strongly recommanded to Save As before using. Still experimental.",
- "wiki_url": "https://github.com/samytichadou/CAF-collect-all-file-addon",  
+ "doc_url": "https://github.com/samytichadou/CAF-collect-all-file-addon",  
  "tracker_url": "https://github.com/samytichadou/CAF-collect-all-file-addon/issues/new",  
  "category": "Import-Export"}  
 
@@ -15,70 +47,25 @@ import os
 import shutil
 import datetime
 
-today = datetime.date.today()
-dt = datetime.datetime.today()
+def strips_all(sequence_editor):
+    # All strips, including those inside meta strips.
+    # Blender 5.x: strips_all, Blender 4.2: sequences_all
+    if sequence_editor is None:
+        return []
+    if hasattr(sequence_editor, "strips_all"):
+        return sequence_editor.strips_all
+    return sequence_editor.sequences_all
+
+def sequencer_scene(context):
+    # The scene shown in the Video Sequencer.
+    # Blender 5.x edits the workspace's Sequencer Scene, 4.2 the active scene.
+    return getattr(context, "sequencer_scene", None) or context.scene
 
 ###################################################
 
 # Op1 Tous les fichiers #
 
 ###################################################
-def get_path(context):
-    path = bpy.context.blend_data.filepath
-    return os.path.dirname(path)
-
-def is_image(obj):
-    return obj.type == 'IMAGE'
-
-def getimages(context):
-    # Make all paths absolute
-    bpy.ops.file.make_paths_absolute()
-
-    # Get the path of the blend file
-    blend_path = get_path(context)
-
-    # Define the path to the resources directory
-    resources_folder = os.path.join(blend_path, "blends_ressources")
-
-    # Define the type of datablocks to collect
-    images = bpy.data.images
-
-    # Create the resources directory if it doesn't exist
-    os.makedirs(resources_folder, exist_ok=True)
-
-    # Create a file to log the operation
-    file = open(os.path.join(resources_folder, "report.txt"), "w")
-    file.write("Collect Files Operation Report\n\n\n")
-    file.write("Operation starts : " + str(datetime.datetime.now()) + "\n\n")
-
-    # Collect and link images
-    for obj in images:
-        if is_image(obj):
-            folder = os.path.join(resources_folder, "Images")
-            new_path = os.path.join(folder, os.path.basename(obj.filepath))
-
-            if obj.filepath == new_path:
-                file.write("    The image " + obj.name + " is already linked.\n")
-                print(obj.name + " - IMAGE ALREADY LINKED")
-
-            elif os.path.exists(new_path):
-                obj.filepath = new_path
-                file.write("    The image " + obj.name + " is linked to " + os.path.basename(obj.filepath) + "\n")
-                print(obj.name + " - IMAGE LINKED")
-
-            else:
-                file.write("    Copying image " + obj.name + " to " + os.path.basename(obj.filepath) + ".\n")
-                shutil.copy2(os.path.abspath(obj.filepath), folder)
-                obj.filepath = new_path
-                print(obj.name + " - IMAGE COPIED")
-
-    # Close the log file
-    file.write("\n\n\n\n\nOperation ends : " + str(datetime.datetime.now()) + "\n\n")
-    file.close()
-
-    print("\nFiles Copied and Relinked\nCheck associated _Ressources folder for files and report\n")
-    print("---Warning---")
-    print("Path of the Copied Files are Absolute")
 def getthemall (context):
 
     ### rendre tous les chemins absolus ###
@@ -103,9 +90,9 @@ def getthemall (context):
 
     ### créer compte rendu ###
     os.makedirs(ressourcesfolder, exist_ok=True)
-    file = open(ressourcesfolder + "//" + blendnom + "_allfiles_" + "_" + str(today) + "_report.txt", "w")
+    file = open(ressourcesfolder + "//" + blendnom + "_allfiles_" + "_" + str(datetime.date.today()) + "_report.txt", "w", encoding="utf-8")
     file.write("Collect Files Operation Report\n\n\n")
-    file.write("Operation starts : " + str(dt) + "\n\n")
+    file.write("Operation starts : " + str(datetime.datetime.now()) + "\n\n")
 
     ### Strips ###
 
@@ -115,7 +102,7 @@ def getthemall (context):
         
         if scene.sequence_editor is not None:
             
-            strip = scene.sequence_editor.sequences_all
+            strip = strips_all(scene.sequence_editor)
             
             if strip is not None:
                 
@@ -139,6 +126,9 @@ def getthemall (context):
                                 file.write("    VIDEO STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                                 print(bpy.path.basename(obj.filepath) + " - VIDEO STRIP LINKED")
 
+                        elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                            file.write("    VIDEO STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                            print(obj.name + " not found - VIDEO STRIP MISSING")
                         else:
                             os.makedirs(ressourcesfolder, exist_ok=True)
                             os.makedirs(sfolder, exist_ok=True)
@@ -161,45 +151,51 @@ def getthemall (context):
 
                             if obj.directory == sfolder :
                                 
-                                file.write("    IMAGE STRIP IGNORED : " + obj.name + " already copied and linked to "+ bpy.path.basename(obj.filepath) + "\n")
+                                file.write("    IMAGE STRIP IGNORED : " + obj.name + " already copied and linked to "+ obj.elements[0].filename + "\n")
                                 print(obj.elements[0].filename + " already copied/linked - IMAGE STRIP IGNORED")
 
                             else:
                                 if os.path.exists(Inewpath) == True :
                                 
                                     obj.directory=sfolder
-                                    file.write("    IMAGE STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
+                                    file.write("    IMAGE STRIP LINKED : " + obj.name + " linked to " + obj.elements[0].filename + "\n")
                                     print(obj.elements[0].filename + " - IMAGE STRIP LINKED")
 
+                                elif not os.path.exists(bpy.path.abspath(obj.directory) + "/" + obj.elements[0].filename):
+                                    file.write("    IMAGE STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.directory) + "/" + obj.elements[0].filename + "\n")
+                                    print(obj.name + " not found - IMAGE STRIP MISSING")
                                 else :
                                     os.makedirs(ressourcesfolder, exist_ok=True)
                                     os.makedirs(sfolder, exist_ok=True)
                                     print(obj.elements[0].filename + " - IMAGE STRIP COPYING...")
-                                    shutil.copy2(bpy.path.abspath(obj.directory) + "/" + obj.name, Inewpath)
+                                    shutil.copy2(bpy.path.abspath(obj.directory) + "/" + obj.elements[0].filename, Inewpath)
                                     obj.directory=sfolder
-                                    file.write("    IMAGE STRIP COPIED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
+                                    file.write("    IMAGE STRIP COPIED : " + obj.name + " linked to " + obj.elements[0].filename + "\n")
                                     print(obj.elements[0].filename + " - IMAGE STRIP COPIED")
 
                         else :
                             if obj.directory == ISnewpath :
                                 
-                                file.write("    IMAGE SEQUENCE STRIP IGNORED : " + obj.name + " already copied and linked to "+ bpy.path.basename(obj.filepath) + "\n")
+                                file.write("    IMAGE SEQUENCE STRIP IGNORED : " + obj.name + " already copied and linked to "+ obj.elements[0].filename + "\n")
                                 print(obj.elements[0].filename + " sequence already copied/linked - IMAGE SEQUENCE STRIP IGNORED")
                             
                             else:
                                 if os.path.exists(ISnewpath) == True :
                                 
                                     obj.directory=ISnewpath
-                                    file.write("    IMAGE SEQUENCE STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
+                                    file.write("    IMAGE SEQUENCE STRIP LINKED : " + obj.name + " linked to " + obj.elements[0].filename + "\n")
                                     print(obj.elements[0].filename + " sequence - IMAGE SEQUENCE STRIP LINKED")
                                 
+                                elif not os.path.exists(bpy.path.abspath(obj.directory)):
+                                    file.write("    IMAGE SEQUENCE STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.directory) + "\n")
+                                    print(obj.name + " not found - IMAGE SEQUENCE STRIP MISSING")
                                 else :
                                     os.makedirs(ressourcesfolder, exist_ok=True)
                                     os.makedirs(ISfolder, exist_ok=True)
                                     print(obj.elements[0].filename + " sequence - IMAGE SEQUENCE STRIP COPYING")
                                     shutil.copytree(bpy.path.abspath(obj.directory), ISnewpath)
                                     obj.directory=ISnewpath
-                                    file.write("    IMAGE SEQUENCE STRIP COPIED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
+                                    file.write("    IMAGE SEQUENCE STRIP COPIED : " + obj.name + " linked to " + obj.elements[0].filename + "\n")
                                     print(obj.elements[0].filename + " sequaence - IMAGE SEQUENCE STRIP COPIED")
 
                     elif obj.type == 'SOUND':
@@ -236,6 +232,9 @@ def getthemall (context):
                                     file.write("    SOUND STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.sound.filepath) + "\n")
                                     print(bpy.path.basename(obj.sound.filepath) + " - SOUND LINKED")
                                     
+                            elif not os.path.exists(bpy.path.abspath(obj.sound.filepath)):
+                                file.write("    SOUND STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.sound.filepath) + "\n")
+                                print(obj.name + " not found - SOUND STRIP MISSING")
                             else:
                                 os.makedirs(ressourcesfolder, exist_ok=True)
                                 os.makedirs(sfolder, exist_ok=True)   
@@ -274,6 +273,9 @@ def getthemall (context):
                     file.write("    IMAGE LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                     print(bpy.path.basename(obj.filepath) + " - IMAGE LINKED")
 
+                elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                    file.write("    IMAGE MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                    print(obj.name + " not found - IMAGE MISSING")
                 else:
                     os.makedirs(ressourcesfolder, exist_ok=True)
                     os.makedirs(folder, exist_ok=True)
@@ -324,6 +326,9 @@ def getthemall (context):
                         file.write("    IMAGE SEQUENCE LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                         print(bpy.path.basename(obj.filepath) + " sequence - IMAGE SEQUENCE LINKED")
 
+                    elif not os.path.exists(parentpath):
+                        file.write("    IMAGE SEQUENCE MISSING : " + obj.name + " not found at " + parentpath + "\n")
+                        print(obj.name + " not found - IMAGE SEQUENCE MISSING")
                     else :
                         os.makedirs(ressourcesfolder, exist_ok=True)
                         os.makedirs(folder, exist_ok=True)
@@ -333,6 +338,9 @@ def getthemall (context):
                         file.write("    IMAGE SEQUENCE COPIED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                         print(bpy.path.basename(obj.filepath) + " sequence - IMAGE SEQUENCE COPIED")
 
+                elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                    file.write("    MOVIE CLIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                    print(obj.name + " not found - MOVIE CLIP MISSING")
                 else :
                     os.makedirs(ressourcesfolder, exist_ok=True)
                     os.makedirs(folder, exist_ok=True)
@@ -367,6 +375,9 @@ def getthemall (context):
                 file.write("    BLEND LIBRARY LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                 print(bpy.path.basename(obj.filepath) + " - LIBRARY LINKED")
                 
+            elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                file.write("    BLEND LIBRARY MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                print(obj.name + " not found - BLEND LIBRARY MISSING")
             else:
                 
                 os.makedirs(ressourcesfolder, exist_ok=True)
@@ -413,6 +424,9 @@ def getthemall (context):
                     file.write("    FONT LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                     print(bpy.path.basename(obj.filepath) + " - FONT LINKED")
 
+                elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                    file.write("    FONT MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                    print(obj.name + " not found - FONT MISSING")
                 else:
                     os.makedirs(ressourcesfolder, exist_ok=True)
                     os.makedirs(folder, exist_ok=True)
@@ -424,7 +438,7 @@ def getthemall (context):
                     file.write("    FONT COPIED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                     print(bpy.path.basename(obj.filepath) + " - FONT COPIED")
 
-    file.write("\n\n\n\n\nOperation ends : " + str(dt))
+    file.write("\n\n\n\n\nOperation ends : " + str(datetime.datetime.now()))
     file.close()
 
     print()
@@ -472,9 +486,9 @@ def getimages (context):
     
     ### créer compte rendu ###
     os.makedirs(ressourcesfolder, exist_ok=True)
-    file = open(ressourcesfolder + "//" + blendnom + "_images_" + "_" + str(today) + "_report.txt", "w")
+    file = open(ressourcesfolder + "//" + blendnom + "_images_" + "_" + str(datetime.date.today()) + "_report.txt", "w", encoding="utf-8")
     file.write("Collect Files Operation Report\n\n\n")
-    file.write("Operation starts : " + str(dt) + "\n\n")
+    file.write("Operation starts : " + str(datetime.datetime.now()) + "\n\n")
 
 
     ### Images ###
@@ -503,6 +517,9 @@ def getimages (context):
                     file.write("    IMAGE LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                     print(bpy.path.basename(obj.filepath) + " - IMAGE LINKED")
                                 
+                elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                    file.write("    IMAGE MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                    print(obj.name + " not found - IMAGE MISSING")
                 else:
                     os.makedirs(ressourcesfolder, exist_ok=True)
                     os.makedirs(folder, exist_ok=True)
@@ -514,7 +531,7 @@ def getimages (context):
                     file.write("    IMAGE COPIED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                     print(bpy.path.basename(obj.filepath) + " - IMAGE COPIED")
 
-    file.write("\n\n\n\n\nOperation ends : " + str(dt))
+    file.write("\n\n\n\n\nOperation ends : " + str(datetime.datetime.now()))
     file.close()
 
     print()
@@ -561,9 +578,9 @@ def getclips (context):
     
     ### créer compte rendu ###
     os.makedirs(ressourcesfolder, exist_ok=True)
-    file = open(ressourcesfolder + "//" + blendnom + "_movieclips_" + "_" + str(today) + "_report.txt", "w")
+    file = open(ressourcesfolder + "//" + blendnom + "_movieclips_" + "_" + str(datetime.date.today()) + "_report.txt", "w", encoding="utf-8")
     file.write("Collect Files Operation Report\n\n\n")
-    file.write("Operation starts : " + str(dt) + "\n\n")
+    file.write("Operation starts : " + str(datetime.datetime.now()) + "\n\n")
 
 
     ### Movie Clips ###
@@ -602,6 +619,9 @@ def getclips (context):
                         file.write("    IMAGE SEQUENCE LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                         print(bpy.path.basename(obj.filepath) + " sequence - IMAGE SEQUENCE LINKED")
 
+                    elif not os.path.exists(parentpath):
+                        file.write("    IMAGE SEQUENCE MISSING : " + obj.name + " not found at " + parentpath + "\n")
+                        print(obj.name + " not found - IMAGE SEQUENCE MISSING")
                     else :
                         os.makedirs(ressourcesfolder, exist_ok=True)
                         os.makedirs(folder, exist_ok=True)
@@ -611,6 +631,9 @@ def getclips (context):
                         file.write("    IMAGE SEQUENCE COPIED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                         print(bpy.path.basename(obj.filepath) + " sequence - IMAGE SEQUENCE COPIED")
 
+                elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                    file.write("    MOVIE CLIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                    print(obj.name + " not found - MOVIE CLIP MISSING")
                 else :
                     os.makedirs(ressourcesfolder, exist_ok=True)
                     os.makedirs(folder, exist_ok=True)
@@ -622,7 +645,7 @@ def getclips (context):
                     file.write("    MOVIE CLIP COPIED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                     print(bpy.path.basename(obj.filepath) + " - VIDEO COPIED")
 
-    file.write("\n\n\n\n\nOperation ends : " + str(dt))
+    file.write("\n\n\n\n\nOperation ends : " + str(datetime.datetime.now()))
     file.close()
 
     print()
@@ -669,9 +692,9 @@ def getlibraries (context):
 
     ### créer compte rendu ###
     os.makedirs(ressourcesfolder, exist_ok=True)
-    file = open(ressourcesfolder + "//" + blendnom + "_blendlibraries_" + "_" + str(today) + "_report.txt", "w")
+    file = open(ressourcesfolder + "//" + blendnom + "_blendlibraries_" + "_" + str(datetime.date.today()) + "_report.txt", "w", encoding="utf-8")
     file.write("Collect Files Operation Report\n\n\n")
-    file.write("Operation starts : " + str(dt) + "\n\n")
+    file.write("Operation starts : " + str(datetime.datetime.now()) + "\n\n")
 
 
     ### Libraries ###
@@ -695,6 +718,9 @@ def getlibraries (context):
                 file.write("    BLEND LIBRARY LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                 print(bpy.path.basename(obj.filepath) + " - LIBRARY LINKED")
                 
+            elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                file.write("    BLEND LIBRARY MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                print(obj.name + " not found - BLEND LIBRARY MISSING")
             else:
                 os.makedirs(ressourcesfolder, exist_ok=True)
                 os.makedirs(folder, exist_ok=True)
@@ -707,7 +733,7 @@ def getlibraries (context):
                 print(bpy.path.basename(obj.filepath) + " - LIBRARY COPIED")
                 
                 
-    file.write("\n\n\n\n\nOperation ends : " + str(dt))
+    file.write("\n\n\n\n\nOperation ends : " + str(datetime.datetime.now()))
     file.close()
 
     print()
@@ -751,9 +777,9 @@ def getallstrips (context):
 
     ### créer compte rendu ###
     os.makedirs(ressourcesfolder, exist_ok=True)
-    file = open(ressourcesfolder + "//" + blendnom + "_strips_" + "_" + str(today) + "_report.txt", "w")
+    file = open(ressourcesfolder + "//" + blendnom + "_strips_" + "_" + str(datetime.date.today()) + "_report.txt", "w", encoding="utf-8")
     file.write("Collect Files Operation Report\n\n\n")
-    file.write("Operation starts : " + str(dt) + "\n\n")
+    file.write("Operation starts : " + str(datetime.datetime.now()) + "\n\n")
 
     ### Strips ###
 
@@ -761,7 +787,7 @@ def getallstrips (context):
 
     for scene in bpy.data.scenes: 
         if scene.sequence_editor is not None:
-            strip = scene.sequence_editor.sequences_all
+            strip = strips_all(scene.sequence_editor)
             
             if strip is not None:
                 for obj in strip:
@@ -781,6 +807,9 @@ def getallstrips (context):
                                 file.write("    VIDEO STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                                 print(bpy.path.basename(obj.filepath) + " - VIDEO STRIP LINKED")
 
+                        elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                            file.write("    VIDEO STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                            print(obj.name + " not found - VIDEO STRIP MISSING")
                         else:
                             os.makedirs(ressourcesfolder, exist_ok=True)
                             os.makedirs(sfolder, exist_ok=True)
@@ -803,45 +832,51 @@ def getallstrips (context):
 
                             if obj.directory == sfolder :
                                 
-                                file.write("    IMAGE STRIP IGNORED : " + obj.name + " already copied and linked to "+ bpy.path.basename(obj.filepath) + "\n")
+                                file.write("    IMAGE STRIP IGNORED : " + obj.name + " already copied and linked to "+ obj.elements[0].filename + "\n")
                                 print(obj.elements[0].filename + " already copied/linked - IMAGE STRIP IGNORED")
 
                             else:
                                 if os.path.exists(Inewpath) == True :
                                 
                                     obj.directory=sfolder
-                                    file.write("    IMAGE STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
+                                    file.write("    IMAGE STRIP LINKED : " + obj.name + " linked to " + obj.elements[0].filename + "\n")
                                     print(obj.elements[0].filename + " - IMAGE STRIP LINKED")
 
+                                elif not os.path.exists(bpy.path.abspath(obj.directory) + "/" + obj.elements[0].filename):
+                                    file.write("    IMAGE STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.directory) + "/" + obj.elements[0].filename + "\n")
+                                    print(obj.name + " not found - IMAGE STRIP MISSING")
                                 else :
                                     os.makedirs(ressourcesfolder, exist_ok=True)
                                     os.makedirs(sfolder, exist_ok=True)
                                     print(obj.elements[0].filename + " - IMAGE STRIP COPYING...")
-                                    shutil.copy2(bpy.path.abspath(obj.directory) + "/" + obj.name, Inewpath)
+                                    shutil.copy2(bpy.path.abspath(obj.directory) + "/" + obj.elements[0].filename, Inewpath)
                                     obj.directory=sfolder
-                                    file.write("    IMAGE STRIP COPIED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
+                                    file.write("    IMAGE STRIP COPIED : " + obj.name + " linked to " + obj.elements[0].filename + "\n")
                                     print(obj.elements[0].filename + " - IMAGE STRIP COPIED")
 
                         else :
                             if obj.directory == ISnewpath :
                                 
-                                file.write("    IMAGE SEQUENCE STRIP IGNORED : " + obj.name + " already copied and linked to "+ bpy.path.basename(obj.filepath) + "\n")
+                                file.write("    IMAGE SEQUENCE STRIP IGNORED : " + obj.name + " already copied and linked to "+ obj.elements[0].filename + "\n")
                                 print(obj.elements[0].filename + " sequence already copied/linked - IMAGE SEQUENCE STRIP IGNORED")
 
                             else:
                                 if os.path.exists(ISnewpath) == True :
                                 
                                     obj.directory=ISnewpath
-                                    file.write("    IMAGE SEQUENCE STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
+                                    file.write("    IMAGE SEQUENCE STRIP LINKED : " + obj.name + " linked to " + obj.elements[0].filename + "\n")
                                     print(obj.elements[0].filename + " sequence - IMAGE SEQUENCE STRIP LINKED")
 
+                                elif not os.path.exists(bpy.path.abspath(obj.directory)):
+                                    file.write("    IMAGE SEQUENCE STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.directory) + "\n")
+                                    print(obj.name + " not found - IMAGE SEQUENCE STRIP MISSING")
                                 else :
                                     os.makedirs(ressourcesfolder, exist_ok=True)
                                     os.makedirs(ISfolder, exist_ok=True)
                                     print(obj.elements[0].filename + " sequence - IMAGE SEQUENCE STRIP COPYING")
                                     shutil.copytree(bpy.path.abspath(obj.directory), ISnewpath)
                                     obj.directory=ISnewpath
-                                    file.write("    IMAGE SEQUENCE STRIP COPIED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
+                                    file.write("    IMAGE SEQUENCE STRIP COPIED : " + obj.name + " linked to " + obj.elements[0].filename + "\n")
                                     print(obj.elements[0].filename + " sequence - IMAGE SEQUENCE STRIP COPIED")
 
                     elif obj.type == 'SOUND':
@@ -875,6 +910,9 @@ def getallstrips (context):
                                     file.write("    SOUND STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.sound.filepath) + "\n")
                                     print(bpy.path.basename(obj.sound.filepath) + " - SOUND LINKED")
 
+                            elif not os.path.exists(bpy.path.abspath(obj.sound.filepath)):
+                                file.write("    SOUND STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.sound.filepath) + "\n")
+                                print(obj.name + " not found - SOUND STRIP MISSING")
                             else:
                                 os.makedirs(ressourcesfolder, exist_ok=True)
                                 os.makedirs(sfolder, exist_ok=True)   
@@ -884,7 +922,7 @@ def getallstrips (context):
                                 file.write("    SOUND STRIP COPIED : " + obj.name + " linked to " + bpy.path.basename(obj.sound.filepath) + "\n")
                                 print(bpy.path.basename(obj.sound.filepath) + " - SOUND COPIED")    
 
-    file.write("\n\n\n\n\nOperation ends : " + str(dt))
+    file.write("\n\n\n\n\nOperation ends : " + str(datetime.datetime.now()))
     file.close()
 
     print()
@@ -926,152 +964,162 @@ def getcurrentscenestrips (context):
     ### définir chemin folder ressources ###
     ressourcesfolder=blendossier + "/" + "blends_ressources"
     
-    scene = bpy.context.scene
+    scene = sequencer_scene(context)
     scname = scene.name
-    strip = bpy.data.scenes[scname].sequence_editor.sequences_all
+    strip = strips_all(scene.sequence_editor)
 
     ### créer compte rendu ###
     os.makedirs(ressourcesfolder, exist_ok=True)
-    file = open(ressourcesfolder + "//" + blendnom + "_" + scname + "_strips_" + "_" + str(today) + "_report.txt", "w")
+    file = open(ressourcesfolder + "//" + blendnom + "_" + scname + "_strips_" + "_" + str(datetime.date.today()) + "_report.txt", "w", encoding="utf-8")
     file.write("Collect Files Operation Report\n\n\n")
-    file.write("Operation starts : " + str(dt) + "\n\n")
+    file.write("Operation starts : " + str(datetime.datetime.now()) + "\n\n")
 
     ### Strips ###
 
     file.write("\nSequencer Strips :\n\n")
 
-    for obj in strip: 
+    if scene.sequence_editor is not None:
         
-        if scene.sequence_editor is not None:
-            
-            if strip is not None:
+        if strip is not None:
 
-                for obj in strip:
+            for obj in strip:
+                
+                if obj.type == 'MOVIE' :
                     
-                    if obj.type == 'MOVIE' :
+                    folder=ressourcesfolder + "/" + "Video Sequencer" + "/" + str(scene.name)
+                    sfolder = folder + "/" +  "Video Strips"
+                    newpath=sfolder + "/" + bpy.path.basename(obj.filepath)
+                    
+                    if os.path.exists(newpath) == True :
                         
-                        folder=ressourcesfolder + "/" + "Video Sequencer" + "/" + str(scene.name)
-                        sfolder = folder + "/" +  "Video Strips"
-                        newpath=sfolder + "/" + bpy.path.basename(obj.filepath)
-                        
-                        if os.path.exists(newpath) == True :
-                            
-                            if obj.filepath == newpath:
-                                file.write("    VIDEO STRIP IGNORED : " + obj.name + " already copied and linked to "+ bpy.path.basename(obj.filepath) + "\n")
-                                print(bpy.path.basename(obj.filepath) + " already copied/linked - VIDEO STRIP IGNORED")
-
-                            else :
-                                
-                                obj.filepath=newpath
-                                file.write("    VIDEO STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
-                                print(bpy.path.basename(obj.filepath) + " - VIDEO STRIP LINKED")
-
-                        else:
-                            os.makedirs(ressourcesfolder, exist_ok=True)
-                            os.makedirs(sfolder, exist_ok=True)
-                            print(bpy.path.basename(obj.filepath) + " - VIDEO STRIP COPYING...")
-                            shutil.copy2(bpy.path.abspath(obj.filepath), newpath) 
-                            obj.filepath=newpath
-                            file.write("    VIDEO STRIP COPIED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
-                            print(bpy.path.basename(obj.filepath) + " - VIDEO STRIP COPIED")
-
-                    ### Problème avec image fixe à régler ###    
-                    elif obj.type == 'IMAGE':
-                        folder=ressourcesfolder + "/" + "Video Sequencer" + "/" + str(scene.name)
-                        sfolder = folder + "/" + "Images Strips" + "/"
-                        ISfolder = folder + "/" + "Image Sequence Strips"
-                        Inewpath=sfolder + obj.elements[0].filename
-                        ISnewpath=ISfolder + "/" + os.path.splitext(obj.elements[0].filename)[0] + "/"
-                        
-                        if obj.frame_duration == 1 :
-
-                            if obj.directory == sfolder :
-
-                                file.write("    IMAGE STRIP IGNORED : " + obj.name + " already copied and linked to "+ bpy.path.basename(obj.filepath) + "\n")
-                                print(obj.elements[0].filename + " already copied/linked - IMAGE STRIP IGNORED")
-
-                            else:
-                                if os.path.exists(Inewpath) == True :
-                                
-                                    obj.directory=sfolder
-                                    file.write("    IMAGE STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
-                                    print(obj.elements[0].filename + " - IMAGE STRIP LINKED")
-
-                                else :
-                                    os.makedirs(ressourcesfolder, exist_ok=True)
-                                    os.makedirs(sfolder, exist_ok=True)
-                                    print(obj.elements[0].filename + " - IMAGE STRIP COPYING...")
-                                    shutil.copy2(bpy.path.abspath(obj.directory) + "/" + obj.name, Inewpath)
-                                    obj.directory=sfolder
-                                    file.write("    IMAGE STRIP COPIED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
-                                    print(obj.elements[0].filename + " - IMAGE STRIP COPIED")
+                        if obj.filepath == newpath:
+                            file.write("    VIDEO STRIP IGNORED : " + obj.name + " already copied and linked to "+ bpy.path.basename(obj.filepath) + "\n")
+                            print(bpy.path.basename(obj.filepath) + " already copied/linked - VIDEO STRIP IGNORED")
 
                         else :
-                            if obj.directory == ISnewpath :
-                                
-                                file.write("    IMAGE SEQUENCE STRIP IGNORED : " + obj.name + " already copied and linked to "+ bpy.path.basename(obj.filepath) + "\n")
-                                print(obj.elements[0].filename + " sequence already copied/linked - IMAGE SEQUENCE STRIP IGNORED")
                             
-                            else:
-                                if os.path.exists(ISnewpath) == True :
-                                
-                                    obj.directory=ISnewpath
-                                    file.write("    IMAGE SEQUENCE STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
-                                    print(obj.elements[0].filename + " sequence - IMAGE SEQUENCE STRIP LINKED")
-                                
-                                else :
+                            obj.filepath=newpath
+                            file.write("    VIDEO STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
+                            print(bpy.path.basename(obj.filepath) + " - VIDEO STRIP LINKED")
+
+                    elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                        file.write("    VIDEO STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                        print(obj.name + " not found - VIDEO STRIP MISSING")
+                    else:
+                        os.makedirs(ressourcesfolder, exist_ok=True)
+                        os.makedirs(sfolder, exist_ok=True)
+                        print(bpy.path.basename(obj.filepath) + " - VIDEO STRIP COPYING...")
+                        shutil.copy2(bpy.path.abspath(obj.filepath), newpath) 
+                        obj.filepath=newpath
+                        file.write("    VIDEO STRIP COPIED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
+                        print(bpy.path.basename(obj.filepath) + " - VIDEO STRIP COPIED")
+
+                ### Problème avec image fixe à régler ###    
+                elif obj.type == 'IMAGE':
+                    folder=ressourcesfolder + "/" + "Video Sequencer" + "/" + str(scene.name)
+                    sfolder = folder + "/" + "Images Strips" + "/"
+                    ISfolder = folder + "/" + "Image Sequence Strips"
+                    Inewpath=sfolder + obj.elements[0].filename
+                    ISnewpath=ISfolder + "/" + os.path.splitext(obj.elements[0].filename)[0] + "/"
+                    
+                    if obj.frame_duration == 1 :
+
+                        if obj.directory == sfolder :
+
+                            file.write("    IMAGE STRIP IGNORED : " + obj.name + " already copied and linked to "+ obj.elements[0].filename + "\n")
+                            print(obj.elements[0].filename + " already copied/linked - IMAGE STRIP IGNORED")
+
+                        else:
+                            if os.path.exists(Inewpath) == True :
+                            
+                                obj.directory=sfolder
+                                file.write("    IMAGE STRIP LINKED : " + obj.name + " linked to " + obj.elements[0].filename + "\n")
+                                print(obj.elements[0].filename + " - IMAGE STRIP LINKED")
+
+                            elif not os.path.exists(bpy.path.abspath(obj.directory) + "/" + obj.elements[0].filename):
+                                file.write("    IMAGE STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.directory) + "/" + obj.elements[0].filename + "\n")
+                                print(obj.name + " not found - IMAGE STRIP MISSING")
+                            else :
+                                os.makedirs(ressourcesfolder, exist_ok=True)
+                                os.makedirs(sfolder, exist_ok=True)
+                                print(obj.elements[0].filename + " - IMAGE STRIP COPYING...")
+                                shutil.copy2(bpy.path.abspath(obj.directory) + "/" + obj.elements[0].filename, Inewpath)
+                                obj.directory=sfolder
+                                file.write("    IMAGE STRIP COPIED : " + obj.name + " linked to " + obj.elements[0].filename + "\n")
+                                print(obj.elements[0].filename + " - IMAGE STRIP COPIED")
+
+                    else :
+                        if obj.directory == ISnewpath :
+                            
+                            file.write("    IMAGE SEQUENCE STRIP IGNORED : " + obj.name + " already copied and linked to "+ obj.elements[0].filename + "\n")
+                            print(obj.elements[0].filename + " sequence already copied/linked - IMAGE SEQUENCE STRIP IGNORED")
                         
-                                    os.makedirs(ressourcesfolder, exist_ok=True)
-                                    os.makedirs(ISfolder, exist_ok=True)
-                                    print(obj.elements[0].filename + " sequence - IMAGE SEQUENCE STRIP COPYING")
-                                    shutil.copytree(bpy.path.abspath(obj.directory), ISnewpath)
-                                    obj.directory=ISnewpath
-                                    file.write("    IMAGE SEQUENCE STRIP COPIED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
-                                    print(obj.elements[0].filename + " sequence - IMAGE SEQUENCE STRIP COPIED")
+                        else:
+                            if os.path.exists(ISnewpath) == True :
+                            
+                                obj.directory=ISnewpath
+                                file.write("    IMAGE SEQUENCE STRIP LINKED : " + obj.name + " linked to " + obj.elements[0].filename + "\n")
+                                print(obj.elements[0].filename + " sequence - IMAGE SEQUENCE STRIP LINKED")
+                            
+                            elif not os.path.exists(bpy.path.abspath(obj.directory)):
+                                file.write("    IMAGE SEQUENCE STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.directory) + "\n")
+                                print(obj.name + " not found - IMAGE SEQUENCE STRIP MISSING")
+                            else :
+                    
+                                os.makedirs(ressourcesfolder, exist_ok=True)
+                                os.makedirs(ISfolder, exist_ok=True)
+                                print(obj.elements[0].filename + " sequence - IMAGE SEQUENCE STRIP COPYING")
+                                shutil.copytree(bpy.path.abspath(obj.directory), ISnewpath)
+                                obj.directory=ISnewpath
+                                file.write("    IMAGE SEQUENCE STRIP COPIED : " + obj.name + " linked to " + obj.elements[0].filename + "\n")
+                                print(obj.elements[0].filename + " sequence - IMAGE SEQUENCE STRIP COPIED")
 
-                    elif obj.type == 'SOUND':
-                        vfolder=ressourcesfolder + "/" + "Video Sequencer" + "/" + str(scene.name)
-                        vsfolder = vfolder + "/" +  "Video Strips"
-                        vnewpath=vsfolder + "/" + bpy.path.basename(obj.sound.filepath)
-                        
-                        folder=ressourcesfolder + "/" + "Video Sequencer" + "/" + str(scene.name)    
-                        sfolder = folder + "/" +  "Sounds Strips"
-                        newpath=sfolder + "/" + bpy.path.basename(obj.sound.filepath)
+                elif obj.type == 'SOUND':
+                    vfolder=ressourcesfolder + "/" + "Video Sequencer" + "/" + str(scene.name)
+                    vsfolder = vfolder + "/" +  "Video Strips"
+                    vnewpath=vsfolder + "/" + bpy.path.basename(obj.sound.filepath)
+                    
+                    folder=ressourcesfolder + "/" + "Video Sequencer" + "/" + str(scene.name)    
+                    sfolder = folder + "/" +  "Sounds Strips"
+                    newpath=sfolder + "/" + bpy.path.basename(obj.sound.filepath)
 
-                        if os.path.isfile(vnewpath) == True :
+                    if os.path.isfile(vnewpath) == True :
 
-                            if obj.sound.filepath==vnewpath :
+                        if obj.sound.filepath==vnewpath :
+                            file.write("    SOUND STRIP IGNORED : " + obj.name + " already copied and linked to "+ bpy.path.basename(obj.sound.filepath) + "\n")
+                            print(bpy.path.basename(obj.sound.filepath) + " already copied/linked - SOUND IGNORED")
+
+                        else :
+                            obj.sound.filepath=vnewpath
+                            file.write("    SOUND STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.sound.filepath) + "\n")
+                            print(bpy.path.basename(obj.sound.filepath) + " - SOUND LINKED")
+
+                    else :
+                        if os.path.isfile(newpath) == True :
+                            
+                            if obj.sound.filepath==newpath :
                                 file.write("    SOUND STRIP IGNORED : " + obj.name + " already copied and linked to "+ bpy.path.basename(obj.sound.filepath) + "\n")
                                 print(bpy.path.basename(obj.sound.filepath) + " already copied/linked - SOUND IGNORED")
 
-                            else :
-                                obj.sound.filepath=vnewpath
+                            else:
+                                obj.sound.filepath=newpath
                                 file.write("    SOUND STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.sound.filepath) + "\n")
                                 print(bpy.path.basename(obj.sound.filepath) + " - SOUND LINKED")
 
-                        else :
-                            if os.path.isfile(newpath) == True :
-                                
-                                if obj.sound.filepath==newpath :
-                                    file.write("    SOUND STRIP IGNORED : " + obj.name + " already copied and linked to "+ bpy.path.basename(obj.sound.filepath) + "\n")
-                                    print(bpy.path.basename(obj.sound.filepath) + " already copied/linked - SOUND IGNORED")
+                        elif not os.path.exists(bpy.path.abspath(obj.sound.filepath)):
+                            file.write("    SOUND STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.sound.filepath) + "\n")
+                            print(obj.name + " not found - SOUND STRIP MISSING")
+                        else:
+                            os.makedirs(ressourcesfolder, exist_ok=True)
+                            os.makedirs(sfolder, exist_ok=True)   
+                            print(bpy.path.basename(obj.sound.filepath) + " - SOUND COPYING...")                 
+                            shutil.copy2(bpy.path.abspath(obj.sound.filepath), newpath) 
+                            obj.sound.filepath=newpath
+                            file.write("    SOUND STRIP COPIED : " + obj.name + " linked to " + bpy.path.basename(obj.sound.filepath) + "\n")
+                            print(bpy.path.basename(obj.sound.filepath) + " - SOUND COPIED")    
+                    
 
-                                else:
-                                    obj.sound.filepath=newpath
-                                    file.write("    SOUND STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.sound.filepath) + "\n")
-                                    print(bpy.path.basename(obj.sound.filepath) + " - SOUND LINKED")
-
-                            else:
-                                os.makedirs(ressourcesfolder, exist_ok=True)
-                                os.makedirs(sfolder, exist_ok=True)   
-                                print(bpy.path.basename(obj.sound.filepath) + " - SOUND COPYING...")                 
-                                shutil.copy2(bpy.path.abspath(obj.sound.filepath), newpath) 
-                                obj.sound.filepath=newpath
-                                file.write("    SOUND STRIP COPIED : " + obj.name + " linked to " + bpy.path.basename(obj.sound.filepath) + "\n")
-                                print(bpy.path.basename(obj.sound.filepath) + " - SOUND COPIED")    
-                        
-
-    file.write("\n\n\n\n\nOperation ends : " + str(dt))
+    file.write("\n\n\n\n\nOperation ends : " + str(datetime.datetime.now()))
     file.close()
 
     print()
@@ -1119,9 +1167,9 @@ def getfonts (context):
     
     ### créer compte rendu ###
     os.makedirs(ressourcesfolder, exist_ok=True)
-    file = open(ressourcesfolder + "//" + blendnom + "_fonts_" + "_" + str(today) + "_report.txt", "w")
+    file = open(ressourcesfolder + "//" + blendnom + "_fonts_" + "_" + str(datetime.date.today()) + "_report.txt", "w", encoding="utf-8")
     file.write("Collect Files Operation Report\n\n\n")
-    file.write("Operation starts : " + str(dt) + "\n\n")
+    file.write("Operation starts : " + str(datetime.datetime.now()) + "\n\n")
 
 
     ### Fonts ###
@@ -1156,6 +1204,9 @@ def getfonts (context):
                     file.write("    FONT LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                     print(bpy.path.basename(obj.filepath) + " - FONT LINKED")
 
+                elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                    file.write("    FONT MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                    print(obj.name + " not found - FONT MISSING")
                 else:
                     os.makedirs(ressourcesfolder, exist_ok=True)
                     os.makedirs(folder, exist_ok=True)
@@ -1167,7 +1218,7 @@ def getfonts (context):
                     file.write("    FONT COPIED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                     print(bpy.path.basename(obj.filepath) + " - FONT COPIED")
 
-    file.write("\n\n\n\n\nOperation ends : " + str(dt))
+    file.write("\n\n\n\n\nOperation ends : " + str(datetime.datetime.now()))
     file.close()
 
     print()
@@ -1194,6 +1245,7 @@ class GetFonts(bpy.types.Operator):
 ########
 
 class CollectExternalFiles(bpy.types.Menu):
+    bl_idname = "CAF_MT_collect_external_files"
     bl_label = "Collect External Files"
 
     def draw(self, context):
@@ -1211,7 +1263,7 @@ class CollectExternalFiles(bpy.types.Menu):
 def menu_draw(self, context):
     layout = self.layout
     layout.separator()
-    layout.menu("CollectExternalFiles" , icon='GHOST_ENABLED')
+    layout.menu(CollectExternalFiles.bl_idname , icon='GHOST_ENABLED')
 
 classes = (
     GetThemAll,
@@ -1230,9 +1282,9 @@ def register():
     bpy.types.TOPBAR_MT_file_external_data.append(menu_draw)
 
 def unregister():
-    for cls in classes:
-        bpy.utils.unregister_class(cls)
     bpy.types.TOPBAR_MT_file_external_data.remove(menu_draw)
+    for cls in reversed(classes):
+        bpy.utils.unregister_class(cls)
 
 if __name__ == "__main__":
     register()
