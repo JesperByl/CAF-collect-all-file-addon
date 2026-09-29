@@ -7,7 +7,8 @@
 # Tested with an automated script in Blender 5.2.2 LTS and 4.2 LTS (bpy
 # module, no UI): a saved .blend with external images, an image-sequence
 # clip, a movie, sequencer image/sound/movie strips, a font and a linked
-# .blend library. Every operator copied and relinked its files.
+# .blend library. Every operator copied and relinked its files, and
+# kept going when some or all of those files were missing.
 #
 # Changes from v0.4:
 #   - Sequencer: SequenceEditor.sequences_all no longer exists in 5.x, it
@@ -18,6 +19,8 @@
 #     loop ran once per strip, repeating every line in the report).
 #   - Report date and start/end times are taken when the operator runs,
 #     not when the add-on was loaded. Reports are written as UTF-8.
+#   - A missing source file no longer stops the whole collection with an
+#     error: it is logged as MISSING in the report and left unchanged.
 #   - Removed an unused duplicate of getimages().
 #   - Image strips: copied by file name instead of strip name, and the
 #     report no longer reads obj.filepath, which image strips don't have.
@@ -123,6 +126,9 @@ def getthemall (context):
                                 file.write("    VIDEO STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                                 print(bpy.path.basename(obj.filepath) + " - VIDEO STRIP LINKED")
 
+                        elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                            file.write("    VIDEO STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                            print(obj.name + " not found - VIDEO STRIP MISSING")
                         else:
                             os.makedirs(ressourcesfolder, exist_ok=True)
                             os.makedirs(sfolder, exist_ok=True)
@@ -155,6 +161,9 @@ def getthemall (context):
                                     file.write("    IMAGE STRIP LINKED : " + obj.name + " linked to " + obj.elements[0].filename + "\n")
                                     print(obj.elements[0].filename + " - IMAGE STRIP LINKED")
 
+                                elif not os.path.exists(bpy.path.abspath(obj.directory) + "/" + obj.elements[0].filename):
+                                    file.write("    IMAGE STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.directory) + "/" + obj.elements[0].filename + "\n")
+                                    print(obj.name + " not found - IMAGE STRIP MISSING")
                                 else :
                                     os.makedirs(ressourcesfolder, exist_ok=True)
                                     os.makedirs(sfolder, exist_ok=True)
@@ -177,6 +186,9 @@ def getthemall (context):
                                     file.write("    IMAGE SEQUENCE STRIP LINKED : " + obj.name + " linked to " + obj.elements[0].filename + "\n")
                                     print(obj.elements[0].filename + " sequence - IMAGE SEQUENCE STRIP LINKED")
                                 
+                                elif not os.path.exists(bpy.path.abspath(obj.directory)):
+                                    file.write("    IMAGE SEQUENCE STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.directory) + "\n")
+                                    print(obj.name + " not found - IMAGE SEQUENCE STRIP MISSING")
                                 else :
                                     os.makedirs(ressourcesfolder, exist_ok=True)
                                     os.makedirs(ISfolder, exist_ok=True)
@@ -220,6 +232,9 @@ def getthemall (context):
                                     file.write("    SOUND STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.sound.filepath) + "\n")
                                     print(bpy.path.basename(obj.sound.filepath) + " - SOUND LINKED")
                                     
+                            elif not os.path.exists(bpy.path.abspath(obj.sound.filepath)):
+                                file.write("    SOUND STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.sound.filepath) + "\n")
+                                print(obj.name + " not found - SOUND STRIP MISSING")
                             else:
                                 os.makedirs(ressourcesfolder, exist_ok=True)
                                 os.makedirs(sfolder, exist_ok=True)   
@@ -258,6 +273,9 @@ def getthemall (context):
                     file.write("    IMAGE LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                     print(bpy.path.basename(obj.filepath) + " - IMAGE LINKED")
 
+                elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                    file.write("    IMAGE MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                    print(obj.name + " not found - IMAGE MISSING")
                 else:
                     os.makedirs(ressourcesfolder, exist_ok=True)
                     os.makedirs(folder, exist_ok=True)
@@ -308,6 +326,9 @@ def getthemall (context):
                         file.write("    IMAGE SEQUENCE LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                         print(bpy.path.basename(obj.filepath) + " sequence - IMAGE SEQUENCE LINKED")
 
+                    elif not os.path.exists(parentpath):
+                        file.write("    IMAGE SEQUENCE MISSING : " + obj.name + " not found at " + parentpath + "\n")
+                        print(obj.name + " not found - IMAGE SEQUENCE MISSING")
                     else :
                         os.makedirs(ressourcesfolder, exist_ok=True)
                         os.makedirs(folder, exist_ok=True)
@@ -317,6 +338,9 @@ def getthemall (context):
                         file.write("    IMAGE SEQUENCE COPIED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                         print(bpy.path.basename(obj.filepath) + " sequence - IMAGE SEQUENCE COPIED")
 
+                elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                    file.write("    MOVIE CLIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                    print(obj.name + " not found - MOVIE CLIP MISSING")
                 else :
                     os.makedirs(ressourcesfolder, exist_ok=True)
                     os.makedirs(folder, exist_ok=True)
@@ -351,6 +375,9 @@ def getthemall (context):
                 file.write("    BLEND LIBRARY LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                 print(bpy.path.basename(obj.filepath) + " - LIBRARY LINKED")
                 
+            elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                file.write("    BLEND LIBRARY MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                print(obj.name + " not found - BLEND LIBRARY MISSING")
             else:
                 
                 os.makedirs(ressourcesfolder, exist_ok=True)
@@ -397,6 +424,9 @@ def getthemall (context):
                     file.write("    FONT LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                     print(bpy.path.basename(obj.filepath) + " - FONT LINKED")
 
+                elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                    file.write("    FONT MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                    print(obj.name + " not found - FONT MISSING")
                 else:
                     os.makedirs(ressourcesfolder, exist_ok=True)
                     os.makedirs(folder, exist_ok=True)
@@ -487,6 +517,9 @@ def getimages (context):
                     file.write("    IMAGE LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                     print(bpy.path.basename(obj.filepath) + " - IMAGE LINKED")
                                 
+                elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                    file.write("    IMAGE MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                    print(obj.name + " not found - IMAGE MISSING")
                 else:
                     os.makedirs(ressourcesfolder, exist_ok=True)
                     os.makedirs(folder, exist_ok=True)
@@ -586,6 +619,9 @@ def getclips (context):
                         file.write("    IMAGE SEQUENCE LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                         print(bpy.path.basename(obj.filepath) + " sequence - IMAGE SEQUENCE LINKED")
 
+                    elif not os.path.exists(parentpath):
+                        file.write("    IMAGE SEQUENCE MISSING : " + obj.name + " not found at " + parentpath + "\n")
+                        print(obj.name + " not found - IMAGE SEQUENCE MISSING")
                     else :
                         os.makedirs(ressourcesfolder, exist_ok=True)
                         os.makedirs(folder, exist_ok=True)
@@ -595,6 +631,9 @@ def getclips (context):
                         file.write("    IMAGE SEQUENCE COPIED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                         print(bpy.path.basename(obj.filepath) + " sequence - IMAGE SEQUENCE COPIED")
 
+                elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                    file.write("    MOVIE CLIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                    print(obj.name + " not found - MOVIE CLIP MISSING")
                 else :
                     os.makedirs(ressourcesfolder, exist_ok=True)
                     os.makedirs(folder, exist_ok=True)
@@ -679,6 +718,9 @@ def getlibraries (context):
                 file.write("    BLEND LIBRARY LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                 print(bpy.path.basename(obj.filepath) + " - LIBRARY LINKED")
                 
+            elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                file.write("    BLEND LIBRARY MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                print(obj.name + " not found - BLEND LIBRARY MISSING")
             else:
                 os.makedirs(ressourcesfolder, exist_ok=True)
                 os.makedirs(folder, exist_ok=True)
@@ -765,6 +807,9 @@ def getallstrips (context):
                                 file.write("    VIDEO STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                                 print(bpy.path.basename(obj.filepath) + " - VIDEO STRIP LINKED")
 
+                        elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                            file.write("    VIDEO STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                            print(obj.name + " not found - VIDEO STRIP MISSING")
                         else:
                             os.makedirs(ressourcesfolder, exist_ok=True)
                             os.makedirs(sfolder, exist_ok=True)
@@ -797,6 +842,9 @@ def getallstrips (context):
                                     file.write("    IMAGE STRIP LINKED : " + obj.name + " linked to " + obj.elements[0].filename + "\n")
                                     print(obj.elements[0].filename + " - IMAGE STRIP LINKED")
 
+                                elif not os.path.exists(bpy.path.abspath(obj.directory) + "/" + obj.elements[0].filename):
+                                    file.write("    IMAGE STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.directory) + "/" + obj.elements[0].filename + "\n")
+                                    print(obj.name + " not found - IMAGE STRIP MISSING")
                                 else :
                                     os.makedirs(ressourcesfolder, exist_ok=True)
                                     os.makedirs(sfolder, exist_ok=True)
@@ -819,6 +867,9 @@ def getallstrips (context):
                                     file.write("    IMAGE SEQUENCE STRIP LINKED : " + obj.name + " linked to " + obj.elements[0].filename + "\n")
                                     print(obj.elements[0].filename + " sequence - IMAGE SEQUENCE STRIP LINKED")
 
+                                elif not os.path.exists(bpy.path.abspath(obj.directory)):
+                                    file.write("    IMAGE SEQUENCE STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.directory) + "\n")
+                                    print(obj.name + " not found - IMAGE SEQUENCE STRIP MISSING")
                                 else :
                                     os.makedirs(ressourcesfolder, exist_ok=True)
                                     os.makedirs(ISfolder, exist_ok=True)
@@ -859,6 +910,9 @@ def getallstrips (context):
                                     file.write("    SOUND STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.sound.filepath) + "\n")
                                     print(bpy.path.basename(obj.sound.filepath) + " - SOUND LINKED")
 
+                            elif not os.path.exists(bpy.path.abspath(obj.sound.filepath)):
+                                file.write("    SOUND STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.sound.filepath) + "\n")
+                                print(obj.name + " not found - SOUND STRIP MISSING")
                             else:
                                 os.makedirs(ressourcesfolder, exist_ok=True)
                                 os.makedirs(sfolder, exist_ok=True)   
@@ -948,6 +1002,9 @@ def getcurrentscenestrips (context):
                             file.write("    VIDEO STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                             print(bpy.path.basename(obj.filepath) + " - VIDEO STRIP LINKED")
 
+                    elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                        file.write("    VIDEO STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                        print(obj.name + " not found - VIDEO STRIP MISSING")
                     else:
                         os.makedirs(ressourcesfolder, exist_ok=True)
                         os.makedirs(sfolder, exist_ok=True)
@@ -979,6 +1036,9 @@ def getcurrentscenestrips (context):
                                 file.write("    IMAGE STRIP LINKED : " + obj.name + " linked to " + obj.elements[0].filename + "\n")
                                 print(obj.elements[0].filename + " - IMAGE STRIP LINKED")
 
+                            elif not os.path.exists(bpy.path.abspath(obj.directory) + "/" + obj.elements[0].filename):
+                                file.write("    IMAGE STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.directory) + "/" + obj.elements[0].filename + "\n")
+                                print(obj.name + " not found - IMAGE STRIP MISSING")
                             else :
                                 os.makedirs(ressourcesfolder, exist_ok=True)
                                 os.makedirs(sfolder, exist_ok=True)
@@ -1001,6 +1061,9 @@ def getcurrentscenestrips (context):
                                 file.write("    IMAGE SEQUENCE STRIP LINKED : " + obj.name + " linked to " + obj.elements[0].filename + "\n")
                                 print(obj.elements[0].filename + " sequence - IMAGE SEQUENCE STRIP LINKED")
                             
+                            elif not os.path.exists(bpy.path.abspath(obj.directory)):
+                                file.write("    IMAGE SEQUENCE STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.directory) + "\n")
+                                print(obj.name + " not found - IMAGE SEQUENCE STRIP MISSING")
                             else :
                     
                                 os.makedirs(ressourcesfolder, exist_ok=True)
@@ -1043,6 +1106,9 @@ def getcurrentscenestrips (context):
                                 file.write("    SOUND STRIP LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.sound.filepath) + "\n")
                                 print(bpy.path.basename(obj.sound.filepath) + " - SOUND LINKED")
 
+                        elif not os.path.exists(bpy.path.abspath(obj.sound.filepath)):
+                            file.write("    SOUND STRIP MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.sound.filepath) + "\n")
+                            print(obj.name + " not found - SOUND STRIP MISSING")
                         else:
                             os.makedirs(ressourcesfolder, exist_ok=True)
                             os.makedirs(sfolder, exist_ok=True)   
@@ -1138,6 +1204,9 @@ def getfonts (context):
                     file.write("    FONT LINKED : " + obj.name + " linked to " + bpy.path.basename(obj.filepath) + "\n")
                     print(bpy.path.basename(obj.filepath) + " - FONT LINKED")
 
+                elif not os.path.exists(bpy.path.abspath(obj.filepath)):
+                    file.write("    FONT MISSING : " + obj.name + " not found at " + bpy.path.abspath(obj.filepath) + "\n")
+                    print(obj.name + " not found - FONT MISSING")
                 else:
                     os.makedirs(ressourcesfolder, exist_ok=True)
                     os.makedirs(folder, exist_ok=True)
